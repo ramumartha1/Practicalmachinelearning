@@ -1,0 +1,125 @@
+---
+title: "Assignment-8"
+author: "Ramu"
+output: html_document
+---
+
+```{r Lib package, echo = TRUE, include=FALSE, message = F, warning = F}
+library(caret)
+library(ggplot2)
+library(randomForest)
+library(corrplot)
+```
+
+## Objective
+In this project, the goal will be to measure the type of Classe (predict the manner in which they did the exercise) using data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior. Participants are asked to perform barbell lifts correctly and incorrectly in 5 different ways given bellow. 
+
+    Class A : Exactly according to the specification
+    Class B : Throwing the elbows to the front
+    Class C : Lifting the dumbbell only halfway 
+    Class D : Lowering the dumbbell only halfway
+    Class E : Throwing the hips to the front 
+
+Identify the above class using data from accelerometers. 
+
+## Reading data
+```{r import the data, echo = TRUE}
+    fileURL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+    training <- read.csv(url(fileURL))
+    fileURL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+    testing <- read.csv(url(fileURL))
+
+```
+
+## Preprocessing the Data
+
+- Making reproducable analysis by using the set.seed command.
+- Converting the train &  cross validation sets for the machine learing.
+
+```{r prep1, echo = TRUE}
+    set.seed(2500)
+    inTrain  <- createDataPartition(training$classe, p=0.7, list=FALSE)
+    TrainSet <- training[inTrain, ]
+    Cross_validation  <- training[-inTrain, ]
+```
+
+- Data Cleaning 
+```{r clearing, echo = TRUE}
+    NZV <- nearZeroVar(TrainSet)
+    TrainSet <- TrainSet[, -NZV]
+    MissingValues <- sapply(TrainSet, function (x) any(is.na(x) | x == ""))
+    Col_Missings <-names(MissingValues [MissingValues  == FALSE])
+    NewTrain <- TrainSet[, Col_Missings]
+    NewTrain <- NewTrain[, -(1:6)]  ## Removing first few columns which only informations of acticity
+    
+    NZV <- nearZeroVar(Cross_validation)
+    Cross_validation <- Cross_validation[, -NZV]
+    MissingValues <- sapply(Cross_validation, function (x) any(is.na(x) | x == ""))
+    Col_Missings <-names(MissingValues [MissingValues  == FALSE])
+    New_CrossV <- Cross_validation[, Col_Missings]
+    New_CrossV <- New_CrossV[, -(1:6)]    
+```
+
+- New Training set consist of following no observation and variables
+
+```{r train dim, echo=TRUE}
+    dim(NewTrain)
+```
+
+- New cross validation set consist of following no observation and variables
+
+```{r CV dim, echo=TRUE}
+    dim(New_CrossV)
+```
+
+## Data Transformation
+
+- Identifying the confonding variable using correlation function cor()
+```{r train cor, echo=TRUE}
+    as.numeric(sort(cor(NewTrain[, -53])[1,]))
+```
+
+- correlation plot of different mesures after data cleaning.
+
+```{r pic, echo= TRUE, fig.height=10, fig.width=10, fig.align='center' }
+    cor_matrix <- NewTrain[, sapply(NewTrain, is.numeric)]
+    corrPlot <- cor(cor_matrix[, -length(names(cor_matrix))])
+    col<- colorRampPalette(c("red", "white", "blue"))(10)
+    corrplot(corrPlot, method="circle", type="lower", order="hclust", col=col, tl.srt=45)
+```
+
+It appear that some of the variable are corelated. perform Principle component analysis to remove some of redudent variables. Trying find the number of variables with able capture the 95 variability.
+
+```{r PCA, echo=TRUE}
+    Prep_PCA <- preProcess(NewTrain[,1:52],method="pca",thresh=.95)
+    Prep_PCA
+```
+By applyig PCA transformation number of variables reduced from 52 to 25. This Data set will have 95% variance.
+
+## Building Machine Learning Model & Validation 
+
+-  Random Forset Method
+
+```{r RF Model, echo= TRUE, message = FALSE}
+    NewTrain_1 <- predict(Prep_PCA,NewTrain[,1:52])
+    RF_model <- randomForest(NewTrain$classe ~ .,   data=NewTrain_1, do.trace=F)
+```
+
+- Cross validation on the Random Forest model.
+
+```{r cross valiation, echo= TRUE }
+    New_CrossV_1 <- predict(Prep_PCA,New_CrossV[,1:52])
+    confusionMatrix(New_CrossV$classe, predict(RF_model,New_CrossV_1))
+```
+ With Random Forest model we are able to get accurary of the 97% accuary.
+ 
+ - Performed the prediction model using the other methods like gbm but not documented in this report as accuracy was around 82% and solution time was high.
+ 
+## Conclusion
+ - With Random Forest method we are able to get the 97 % accuracy and with only 25 variables.
+ 
+
